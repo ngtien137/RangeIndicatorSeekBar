@@ -1,0 +1,3 @@
+rootProject.name='DemoRangeIndicatorSeekBar'
+include ':app'
+include ':rangeindicatorseekbar'
