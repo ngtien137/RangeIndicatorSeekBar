@@ -6,12 +6,15 @@ import android.graphics.*
 import android.os.Build
 import android.text.TextPaint
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.widget.TextView
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+
 
 class RangeIndicatorSeekBar @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
@@ -53,7 +56,9 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
     private val paintSelectedBar = Paint(Paint.ANTI_ALIAS_FLAG)
     private val paintThumb = Paint(Paint.ANTI_ALIAS_FLAG)
     private val paintThumbRipple = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val paintTextIndicator = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val paintTextIndicator = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+    }
 
     private var min = 0f
     private var max = 0f
@@ -127,10 +132,11 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val widthSize = MeasureSpec.getSize(widthMeasureSpec)
         val measureWidth = measureDimension(widthSize, widthMeasureSpec)
-        var minHeight = max(max(thumbSize, barHeight), thumbRippleSize).toInt()
+        var minHeight = max(max(thumbSize, barHeight), thumbRippleSize).toInt() + paddingTop + paddingBottom
         if (paintTextIndicator.textSize > 0) {
             paintTextIndicator.getTextBounds("1", 0, 1, rectText)
-            minHeight += textIndicatorBottom.toInt() + rectText.height()
+            eLog("Height: ${rectText.height()}, Height sub: ${rectText.bottom-rectText.top}, textSize: ${paintTextIndicator.textSize}")
+            minHeight += textIndicatorBottom.toInt() + rectText.height()*2 //+ getAdditionalPadding()
         }
         val measureHeight = measureDimension(
             minHeight,
@@ -228,12 +234,12 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
         val textProgress =
             if (progressVisibleAsInt) progress.toInt().toString() else progress.toString()
         paintTextIndicator.getTextBounds(textProgress, 0, textProgress.length, rectText)
-        var xText = thumb.centerX() - rectText.width() / 2
-        if (xText < 0)
-            xText = 0f
-        if (xText > width - rectText.width())
-            xText = (width - rectText.width()).toFloat()
-        val yText = thumb.top - textIndicatorBottom - rectText.height()
+        var xText = thumb.centerX()
+        if (xText < rectText.width()/2f)
+            xText = rectText.width()/2f
+        if (xText > width - rectText.width()/2f)
+            xText = width - rectText.width()/2f
+        val yText = thumb.top - textIndicatorBottom - rectText.height() //+ getAdditionalPadding()
         canvas.drawText(textProgress, xText, yText, paintTextIndicator)
     }
 
@@ -388,5 +394,20 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
                 resultThumbIndex = THUMB_INDEX_RIGHT
         }
         return resultThumbIndex
+    }
+
+    private fun getAdditionalPadding(): Int {
+        var mAdditionalPadding = 0
+        val textSize: Float = paintTextIndicator.textSize
+        val textView = TextView(context)
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
+        textView.setLines(1)
+        textView.measure(0, 0)
+        val measuredHeight = textView.measuredHeight
+        if (measuredHeight - textSize > 0) {
+            mAdditionalPadding = (measuredHeight - textSize).toInt()
+        }
+        eLog("Add Padding: $mAdditionalPadding")
+        return mAdditionalPadding
     }
 }
