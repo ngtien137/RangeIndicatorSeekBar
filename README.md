@@ -61,8 +61,8 @@ dependencies {
 ``` 
 
 ## Listener
-```
-rSeekBar.rangerListener = object : RangeIndicatorSeekBar.IRangerListener{
+```kotlin
+rangerSeekBar.rangerListener = object : RangeIndicatorSeekBar.IRangerListener{
 
     override fun onStartTouch(thumbIndex: Int) {
         //Handle when touch view
