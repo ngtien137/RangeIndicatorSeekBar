@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.widget.TextView
+import androidx.core.content.res.ResourcesCompat
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -29,7 +30,6 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
         const val DEF_BAR_SELECTED_COLOR = Color.CYAN
         const val DEF_THUMB_COLOR = Color.YELLOW
         const val DEF_THUMB_RIPPLE_COLOR = Color.YELLOW
-        const val DEF_THUMB_RIPPLE_ALPHA = 0.5f
         const val DEF_THUMB_SIZE = 20f
         const val DEF_THUMB_RIPPLE_SIZE = 40f
         const val DEF_BAR_HEIGHT = 40f
@@ -75,6 +75,8 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
         ViewConfiguration.get(context).scaledTouchSlop
     }
 
+    var rangerListener: IRangerListener? = null
+
     init {
         attrs?.let {
             val ta = context.obtainStyledAttributes(it, R.styleable.RangeIndicatorSeekBar)
@@ -103,7 +105,7 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
                 DEF_BAR_BACKGROUND_COLOR
             )
             paintSelectedBar.color = ta.getColor(
-                R.styleable.RangeIndicatorSeekBar_bar_color_background,
+                R.styleable.RangeIndicatorSeekBar_bar_color_selected,
                 DEF_BAR_SELECTED_COLOR
             )
 
@@ -115,7 +117,14 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
             )
             textIndicatorBottom =
                 ta.getDimension(R.styleable.RangeIndicatorSeekBar_text_indicator_bottom, 0f)
-
+            val fontId = ta.getResourceId(R.styleable.RangeIndicatorSeekBar_text_indicator_font, -1)
+            eLog("Font Id: $fontId")
+            if (fontId != -1) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    paintTextIndicator.typeface = resources.getFont(fontId)
+                } else
+                    paintTextIndicator.typeface = ResourcesCompat.getFont(context, fontId)
+            }
             min = ta.getInt(R.styleable.RangeIndicatorSeekBar_min, 0).toFloat()
             max = ta.getInt(R.styleable.RangeIndicatorSeekBar_max, 100).toFloat()
             minProgress =
@@ -132,11 +141,12 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val widthSize = MeasureSpec.getSize(widthMeasureSpec)
         val measureWidth = measureDimension(widthSize, widthMeasureSpec)
-        var minHeight = max(max(thumbSize, barHeight), thumbRippleSize).toInt() + paddingTop + paddingBottom
+        var minHeight =
+            max(max(thumbSize, barHeight), thumbRippleSize).toInt() + paddingTop + paddingBottom
         if (paintTextIndicator.textSize > 0) {
             paintTextIndicator.getTextBounds("1", 0, 1, rectText)
-            eLog("Height: ${rectText.height()}, Height sub: ${rectText.bottom-rectText.top}, textSize: ${paintTextIndicator.textSize}")
-            minHeight += textIndicatorBottom.toInt() + rectText.height()*2 //+ getAdditionalPadding()
+            eLog("Height: ${rectText.height()}, Height sub: ${rectText.bottom - rectText.top}, textSize: ${paintTextIndicator.textSize}")
+            minHeight += textIndicatorBottom.toInt() + rectText.height() * 2 //+ getAdditionalPadding()
         }
         val measureHeight = measureDimension(
             minHeight,
@@ -235,10 +245,10 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
             if (progressVisibleAsInt) progress.toInt().toString() else progress.toString()
         paintTextIndicator.getTextBounds(textProgress, 0, textProgress.length, rectText)
         var xText = thumb.centerX()
-        if (xText < rectText.width()/2f)
-            xText = rectText.width()/2f
-        if (xText > width - rectText.width()/2f)
-            xText = width - rectText.width()/2f
+        if (xText < rectText.width() / 2f)
+            xText = rectText.width() / 2f
+        if (xText > width - rectText.width() / 2f)
+            xText = width - rectText.width() / 2f
         val yText = thumb.top - textIndicatorBottom - rectText.height() //+ getAdditionalPadding()
         canvas.drawText(textProgress, xText, yText, paintTextIndicator)
     }
@@ -303,6 +313,7 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
                     touchPointF.set(it.x, it.y)
                     currentThumbIndex = getThumbIndexWhenTouch(PointF(it.x, it.y))
                     eLog("TouchThumbIndex: $currentThumbIndex")
+                    rangerListener?.onStartTouch(currentThumbIndex)
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -311,6 +322,11 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
                         if (isMovingThumb) {
                             movingThumb(disMove.toInt())
                             touchPointF.set(it.x, it.y)
+                            rangerListener?.onRangeChanging(
+                                minProgress,
+                                maxProgress,
+                                currentThumbIndex
+                            )
                             return true
                         } else {
                             if (disMove.abs() >= touchSlop) {
@@ -322,10 +338,17 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
                     return false
                 }
                 MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> {
+                    val oldThumbIndex = currentThumbIndex
                     if (paintTextIndicator.textSize > 0)
                         invalidate()
                     currentThumbIndex = THUMB_INDEX_NONE
-                    isMovingThumb = false
+                    if (isMovingThumb) {
+                        rangerListener?.onRangeChanged(minProgress, maxProgress, oldThumbIndex)
+                        isMovingThumb = false
+                    }
+                    rangerListener?.onStopTouch(oldThumbIndex)
+                }
+                else -> {
                 }
             }
         }
@@ -396,6 +419,12 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
         return resultThumbIndex
     }
 
+    fun setProgressRange(minProgress: Float, maxProgress: Float) {
+        rangerListener?.onRangeChanging(minProgress, maxProgress, THUMB_INDEX_NONE)
+        rangerListener?.onRangeChanged(minProgress, maxProgress, THUMB_INDEX_NONE)
+        postInvalidate()
+    }
+
     private fun getAdditionalPadding(): Int {
         var mAdditionalPadding = 0
         val textSize: Float = paintTextIndicator.textSize
@@ -409,5 +438,12 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
         }
         eLog("Add Padding: $mAdditionalPadding")
         return mAdditionalPadding
+    }
+
+    interface IRangerListener {
+        fun onStartTouch(thumbIndex: Int) {}
+        fun onRangeChanging(minProgress: Float, maxProgress: Float, thumbIndex: Int)
+        fun onRangeChanged(minProgress: Float, maxProgress: Float, thumbIndex: Int)
+        fun onStopTouch(lastThumbIndex: Int) {}
     }
 }
