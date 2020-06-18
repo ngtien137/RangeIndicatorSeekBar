@@ -60,8 +60,10 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
     }
 
-    private var min = 0f
-    private var max = 0f
+    var min = 0f
+        private set
+    var max = 0f
+        private set
     private var minProgress = 0f
     private var maxProgress = 0f
     private var progressVisibleAsInt = false
@@ -420,9 +422,44 @@ class RangeIndicatorSeekBar @JvmOverloads constructor(
     }
 
     fun setProgressRange(minProgress: Float, maxProgress: Float) {
-        rangerListener?.onRangeChanging(minProgress, maxProgress, THUMB_INDEX_NONE)
-        rangerListener?.onRangeChanged(minProgress, maxProgress, THUMB_INDEX_NONE)
+        this.minProgress = minProgress
+        this.maxProgress = maxProgress
+        if (minProgress<min||minProgress>max)
+            this.minProgress = min
+        if (maxProgress<min||maxProgress>max||maxProgress<this.minProgress)
+            this.maxProgress = max
+        rangerListener?.onRangeChanging(this.minProgress, this.maxProgress, THUMB_INDEX_NONE)
+        rangerListener?.onRangeChanged(this.minProgress, this.maxProgress, THUMB_INDEX_NONE)
+        syncAllDataSelectWithProgress()
         postInvalidate()
+    }
+
+    fun setMax(max: Float) {
+        this.max = max
+        if (maxProgress > max) {
+            maxProgress = max
+            if (minProgress > maxProgress)
+                minProgress = min
+        }
+        syncAllDataSelectWithProgress()
+        postInvalidate()
+    }
+
+    fun setMin(min: Float) {
+        this.min = min
+        if (minProgress < min) {
+            minProgress = min
+            if (maxProgress < min)
+                maxProgress = max
+        }
+        syncAllDataSelectWithProgress()
+        postInvalidate()
+    }
+
+    private fun syncAllDataSelectWithProgress() {
+        syncThumbWithProgress()
+        syncThumbRippleWithThumb()
+        syncSelectedBarWithThumb()
     }
 
     private fun getAdditionalPadding(): Int {
