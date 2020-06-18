@@ -1,1 +1,1 @@
-"# RangeIndicatorSeekBar" 
+# RangeIndicatorSeekBar
